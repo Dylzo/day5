@@ -1,0 +1,65 @@
+---
+- name: Install Nginx Web Server on RedHat Family
+  yum:
+    name=nginx
+    state=latest
+  when:
+    ansible_os_family == "RedHat"
+  notify:
+    - nginx systemd
+
+- name: Replace nginx.conf
+  template:
+    src=templates/nginx.conf
+    dest=/etc/nginx/nginx.conf
+
+- name: Create home directory for www
+  file:
+    path: /var/www/html/day4
+    state: directory
+
+- name: Add virtual domain in NGINX for RPM
+  template:
+    src=templates/nginx_vhosts.conf
+    dest=/etc/nginx/conf.d/{{ virtual_domain }}.conf
+  when:
+    ansible_os_family == "RedHat"
+  notify:
+    - nginx restart
+
+- name: Generate HTML file
+  template:
+    src=templates/index.html.j2
+    dest=/var/www/html/day4/index.html
+
+- name: Configure nginx systemd service
+  become: true
+  copy:
+    content: |
+      [Unit]
+      Description=The nginx HTTP and reverse proxy server
+      After=network.target remote-fs.target nss-lookup.target
+
+      [Service]
+      Type=forking
+      PIDFile=/run/nginx.pid
+      # Nginx will fail to start if /run/nginx.pid already exists but has the wrong
+      # SELinux context. This might happen when running `nginx -t` from the cmdline.
+      # https://bugzilla.redhat.com/show_bug.cgi?id=1268621
+      ExecStartPre=/usr/bin/rm -f /run/nginx.pid
+      ExecStartPre=/usr/sbin/nginx -t
+      ExecStart=/usr/sbin/nginx
+      ExecReload=/bin/kill -s HUP $MAINPID
+      KillSignal=SIGQUIT
+      TimeoutStopSec=5
+      KillMode=process
+      PrivateTmp=true
+      Restart=on-failure
+      RestartSec=5s
+
+      [Install]
+      WantedBy=multi-user.target
+
+    dest: /etc/systemd/system/nginx.service
+  notify:
+    - nginx systemd restart

@@ -1,0 +1,17 @@
+---
+- hosts: centos
+  vars:
+    nginx_user: nginx
+  become:
+    true
+  become_method:
+    su
+  become_user:
+    root
+  remote_user:
+    dzorenko
+  roles:
+   - epel
+   - remi
+   - nginx
+   - php
